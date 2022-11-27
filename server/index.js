@@ -23,7 +23,7 @@ app.use(
   session({
     key: "userId",
     secret: "subscribe",
-    resave: false,
+    resave: true,
     saveUninitialized: false,
     cookie: {
       expires: 60 * 60 * 24 * 10,
@@ -57,6 +57,26 @@ app.post("/create-account", (req, res) => {
 
 });
 
+app.post("/admin-submit-booking", (req, res) => {
+  const bookid = req.body.id;
+  console.log(bookid);
+
+  db.query(
+    "UPDATE booking_details SET BOOKING_STATUS = 'C' WHERE BOOKING_ID = ?",
+    bookid,
+    (err, result) => {
+      if (err) {
+        console.log(err);
+        res.send({ err: err });
+      } else {
+        console.log("Sucess");
+        res.status(200).json("Sucess");
+      }
+    }
+  );
+
+});
+
 app.post("/update-profile", (req, res) => {
   const name = req.body.name;
   const password = req.body.password;
@@ -74,11 +94,25 @@ app.post("/update-profile", (req, res) => {
   );
 
 });
-let Dlnum ;
+let logFlag;
+app.post("/logout", (req, res) => {
+  const flag = req.body.logoutFlag;
+  if (flag === false) {
+    // req.session.user = null;
+    // req.session.destroy((err) => {
+    //   res.redirect('/?page=ridex') // will always fire after session is destroyed
+    // })
+    req.session.cookie.expires = new Date().getTime();
+  }
+
+});
+
+
+let Dlnum;
 app.post("/profile", (req, res) => {
   Dlnum = req.body.Dlnum;
-
-  if(isDel){
+  isDel = req.body.isDel;
+  if (isDel) {
     db.query(
       "DELETE FROM customer_details WHERE DL_NUMBER = ?",
       Dlnum,
@@ -91,18 +125,19 @@ app.post("/profile", (req, res) => {
 
 });
 
-
+let Dlnum1;
+app.post("/profile-fetch", (req, res) => {
+  Dlnum1 = req.body.Dlnum;
+});
 
 app.get("/profile", (req, res) => {
-
   const q = "SELECT * FROM customer_details WHERE DL_NUMBER = ?;";
 
-  db.query(q, "E7521097", (err, data) => {
+  db.query(q, Dlnum1, (err, data) => {
     if (err) {
       console.log(err);
       return res.json(err);
     }
-    console.log(data);
     return res.json(data);
 
   }
@@ -112,7 +147,7 @@ app.get("/profile", (req, res) => {
 
 app.get("/dashboard", (req, res) => {
 
-  
+
   if (filter == null) {
 
 
@@ -123,7 +158,6 @@ app.get("/dashboard", (req, res) => {
           console.log(err);
           return res.json(err);
         }
-        console.log(data);
         return res.json(data);
       }
     );
@@ -135,7 +169,6 @@ app.get("/dashboard", (req, res) => {
           console.log(err);
           return res.json(err);
         }
-        console.log(data);
         return res.json(data);
       }
     );
@@ -148,9 +181,6 @@ app.get("/dashboard", (req, res) => {
 
 app.get("/home", (req, res) => {
 
-
-
-
   db.query(
     "SELECT car.*, car_category.* FROM car  INNER JOIN car_category ON car.CAR_CATEGORY_NAME = car_category.CATEGORY_NAME WHERE featured = 'y' ORDER BY MILEAGE",
     (err, data) => {
@@ -158,7 +188,6 @@ app.get("/home", (req, res) => {
         console.log(err);
         return res.json(err);
       }
-      console.log(data);
       return res.json(data);
     }
   );
@@ -166,26 +195,26 @@ app.get("/home", (req, res) => {
 
 });
 
-// app.get("/dashboard#compact", (req, res) => {
 
-
-//   db.query(
-//     "SELECT car.*, car_category.* FROM car  INNER JOIN car_category ON car.CAR_CATEGORY_NAME = car_category.CATEGORY_NAME ORDER BY MILEAGE WHERE CAR_CATEGORY_NAME = 'COMPACT'",
-//     (err, data) => {
-//       if (err) {
-//         console.log(err);
-//         return res.json(err);
-//       }
-//       console.log(data);
-//       return res.json(data);
-//     }
-//   );
-
-
-// });
 
 
 app.get("/login", (req, res) => {
+  if (req.session.user) {
+    res.send({ loggedIn: true });
+  } else {
+    res.send({ loggedIn: false });
+  }
+});
+
+app.get("/logout", (req, res) => {
+  if (req.session.user === null) {
+    res.send({ loggedIn: true });
+  } else {
+    res.send({ loggedIn: false });
+  }
+});
+
+app.get("/dashboard/auth", (req, res) => {
   if (req.session.user) {
     res.send({ loggedIn: true });
   } else {
@@ -197,11 +226,11 @@ app.post("/login", (req, res) => {
   const email = req.body.email;
   const password = req.body.password;
   const isAdmin = req.body.isAdmin;
-  const isDoco = req.body.isDoco;
+
 
   db.query(
     "SELECT EMAIL_ID,PASSWORD,DL_NUMBER,isAdmin FROM customer_details WHERE EMAIL_ID = ? AND PASSWORD = ? AND isAdmin =?;",
-    [email, password,isAdmin],
+    [email, password, isAdmin],
     (err, result) => {
       if (err) {
         console.log(err);
@@ -226,25 +255,26 @@ app.post("/login", (req, res) => {
   );
 });
 
-app.post("/booking/books", (req, res) => {
-  
+app.post("/book", (req, res) => {
+
   const dlnum = req.body.dlnum;
   const fdate = req.body.fdate;
   const rdate = req.body.rdate;
-  const status = req.body.status;
   const carReg = req.body.carReg;
   const amount = req.body.amount;
 
   db.query(
-    "INSERT INTO booking_details (DL_NUM,FROM_DT_TIME,RET_DT_TIME,STATUS,AMOUNT,REG_NUM) VALUES (?,?,?,?,?,?)",
-    [dlnum, fdate, rdate, status, amount, carReg],
+    "INSERT INTO booking_details (FROM_DT_TIME,RET_DT_TIME,AMOUNT,BOOKING_STATUS,REG_NUM,DL_NUM) VALUES (?,?,?,'R',?,?)",
+    [fdate, rdate, amount, carReg, dlnum],
     (err, result) => {
       if (err) {
         console.log(err);
         res.send({ err: err });
+      } else {
+        console.log({ message: "Sucess" });
+        res.json({ message: "Sucess" });
       }
-      console.log({ message: "Sucess" });
-      return res.json({ message: "Sucess" });
+
     }
   );
 
@@ -287,6 +317,87 @@ app.get("/booking", (req, res) => {
       }
     }
   );
+});
+
+
+//fetch user booking
+
+
+let user_booking_id;
+let userbooking_dl_num;
+app.post("/my-bookings", (req, res) => {
+  userbooking_dl_num = req.body.dl_num;
+  
+
+
+});
+
+
+app.get("/my-bookings", (req, res) => {
+
+
+
+  db.query(
+    "SELECT car.*, booking_details.* FROM booking_details  INNER JOIN car ON car.REGISTRATION_NUMBER = booking_details.REG_NUM WHERE DL_NUM = ?"
+    , userbooking_dl_num,
+    (err, result) => {
+      console.log(result);
+      res.json(result);
+    }
+  );
+});
+
+
+app.get("/allbookings", (req, res) => {
+
+
+
+  db.query(
+    "SELECT car.*, booking_details.*,customer_details.* FROM booking_details  INNER JOIN car ON car.REGISTRATION_NUMBER = booking_details.REG_NUM INNER JOIN customer_details ON booking_details.DL_NUM = customer_details.DL_NUMBER"
+    ,
+    (err, result) => {
+      console.log(result);
+      res.json(result);
+    }
+  );
+});
+
+
+app.get("/admindashboard", (req, res) => {
+
+  db.query(
+    "SELECT * FROM customer_details"
+    ,
+    (err, result) => {
+      if (err) {
+        console.log(err);
+      } else {
+        console.log(result);
+        res.json(result);
+      }
+    }
+  );
+});
+
+
+app.post("/admindashboard", (req, res) => {
+  let Dlnum1 = req.body.Dlnum;
+
+
+  db.query(
+    "DELETE FROM customer_details WHERE DL_NUMBER = ?",
+    Dlnum1,
+    (err, result) => {
+      if (err) {
+        console.log(err);
+        res.send({ err: err });
+      } else {
+        res.status(200).json("Sucess");
+      }
+    }
+  );
+
+
 });
 
 app.listen(3001, () => {
